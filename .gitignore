@@ -1,0 +1,9 @@
+# DATOS GTFS (ZIPs pesados, se descargan con descargar-nap.py)
+data/
+
+# Dependencias
+node_modules/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
