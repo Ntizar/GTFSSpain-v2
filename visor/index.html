@@ -469,9 +469,13 @@ async function processGTFS(zip, zipName) {
     if (stopTimesFile) {
         const raw = await stopTimesFile.async('string');
         const lines = raw.trim().split('\n');
-        const headers = lines[0].split(',').map(h => h.trim());
+        // Auto-detect delimiter (like parseCSV does)
+        let stDelimiter = ',';
+        if (lines[0].includes('\t')) stDelimiter = '\t';
+        else if (lines[0].includes(';')) stDelimiter = ';';
+        const headers = lines[0].split(stDelimiter).map(h => h.replace(/^"|"$/g, '').trim());
         for (let i = 1; i < lines.length; i++) {
-            const vals = parseCSVLine(lines[i]);
+            const vals = parseCSVLine(lines[i], stDelimiter);
             if (vals.length < 4) continue;
             const row = {};
             headers.forEach((h, j) => { row[h] = vals[j] || ''; });
