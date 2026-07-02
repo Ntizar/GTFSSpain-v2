@@ -146,6 +146,23 @@ img{max-width:100%;height:auto}
   .schedule-panel{left:0}
 }
 
+/* Layer controls */
+.layer-group{margin-bottom:12px}
+.layer-toggle{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--kz-gris-50);border:1px solid var(--kz-gris-200);border-radius:var(--kz-radius-md);cursor:pointer;transition:all var(--kz-transition)}
+.layer-toggle:hover{background:var(--kz-azul-50);border-color:var(--kz-azul-200)}
+.layer-toggle.active{background:var(--kz-azul-50);border-color:var(--kz-azul-400)}
+.layer-toggle .layer-icon{font-size:1.3rem;width:28px;text-align:center}
+.layer-toggle .layer-info{flex:1}
+.layer-toggle .layer-name{font-size:0.82rem;font-weight:600;color:var(--kz-gris-800)}
+.layer-toggle .layer-desc{font-size:0.7rem;color:var(--kz-gris-500);margin-top:1px}
+.layer-toggle .layer-switch{width:36px;height:20px;background:var(--kz-gris-300);border-radius:10px;position:relative;transition:background var(--kz-transition)}
+.layer-toggle.active .layer-switch{background:var(--kz-azul)}
+.layer-toggle .layer-switch::after{content:'';position:absolute;width:16px;height:16px;background:white;border-radius:50%;top:2px;left:2px;transition:transform var(--kz-transition);box-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.layer-toggle.active .layer-switch::after{transform:translateX(16px)}
+.layer-count{font-size:0.7rem;color:var(--kz-azul);font-weight:600;margin-top:2px}
+.layer-loading{font-size:0.7rem;color:var(--kz-gris-400);font-style:italic}
+.layer-error{font-size:0.7rem;color:#dc2626}
+
 /* Frequency bands */
 .freq-bands{display:flex;gap:2px;align-items:flex-end;height:50px;padding:6px 0;margin-bottom:8px;background:var(--kz-gris-50);border-radius:var(--kz-radius-md);border:1px solid var(--kz-gris-200)}
 .freq-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:12px}
@@ -161,9 +178,9 @@ img{max-width:100%;height:auto}
     <div class="header">
         <div>
             <h1>🚌 GTFSSpain v2 — Visor de Transporte Público</h1>
-            <div class="subtitle">Explora paradas, rutas y horarios GTFS de España · Shapes completos con área de búsqueda</div>
+            <div class="subtitle">Explora paradas, rutas, horarios y capas de movilidad de España</div>
         </div>
-        <div class="version">v2.1</div>
+        <div class="version">v2.2</div>
     </div>
     
     <div class="main">
@@ -172,6 +189,7 @@ img{max-width:100%;height:auto}
                 <div class="sidebar-tab active" onclick="switchTab('search')">📍 Buscar</div>
                 <div class="sidebar-tab" onclick="switchTab('routes')">🚌 Líneas</div>
                 <div class="sidebar-tab" onclick="switchTab('data')">📦 Datos</div>
+                <div class="sidebar-tab" onclick="switchTab('layers')">🗺️ Capas</div>
             </div>
             <div class="sidebar-content">
                 <div class="tab-panel active" id="tab-search">
@@ -240,9 +258,70 @@ img{max-width:100%;height:auto}
                             <b>37+ datasets</b> del Punto de Acceso Nacional (NAP) con paradas, rutas, horarios y shapes.
                         </p>
                         <p style="font-size:0.75rem;color:var(--kz-gris-500);margin-top:8px;">
-                            <b>v2:</b> Click en líneas → horarios. Explorador de líneas. Panel de ruta completo.
+                            <b>v2.2:</b> Capas GBFS, Parkings y ZBE. Click en líneas → horarios. Explorador de líneas.
                         </p>
                         <p style="font-size:0.75rem;color:var(--kz-gris-500);margin-top:4px;">Hecho con ❤️ por David Antizar</p>
+                    </div>
+                </div>
+                <div class="tab-panel" id="tab-layers">
+                    <div class="sidebar-section">
+                        <h3>🗺️ Capas del mapa</h3>
+                        <p style="font-size:0.75rem;color:var(--kz-gris-500);margin-bottom:12px;">Activa capas adicionales para enriquecer el mapa</p>
+                        
+                        <div class="layer-group">
+                            <div class="layer-toggle" id="layer-gbfs" onclick="toggleLayer('gbfs')">
+                                <div class="layer-icon">🚲</div>
+                                <div class="layer-info">
+                                    <div class="layer-name">Bicicletas GBFS</div>
+                                    <div class="layer-desc">Estaciones de bicicletas públicas</div>
+                                    <div class="layer-count" id="gbfs-count"></div>
+                                </div>
+                                <div class="layer-switch"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="layer-group">
+                            <div class="layer-toggle" id="layer-parking-public" onclick="toggleLayer('parking-public')">
+                                <div class="layer-icon">🅿️</div>
+                                <div class="layer-info">
+                                    <div class="layer-name">Parkings públicos</div>
+                                    <div class="layer-desc">Aparcamientos públicos (OSM)</div>
+                                    <div class="layer-count" id="parking-public-count"></div>
+                                </div>
+                                <div class="layer-switch"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="layer-group">
+                            <div class="layer-toggle" id="layer-parking-private" onclick="toggleLayer('parking-private')">
+                                <div class="layer-icon">🏢</div>
+                                <div class="layer-info">
+                                    <div class="layer-name">Parkings privados</div>
+                                    <div class="layer-desc">Aparcamientos privados / comerciales (OSM)</div>
+                                    <div class="layer-count" id="parking-private-count"></div>
+                                </div>
+                                <div class="layer-switch"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="layer-group">
+                            <div class="layer-toggle" id="layer-zbe" onclick="toggleLayer('zbe')">
+                                <div class="layer-icon">🚫</div>
+                                <div class="layer-info">
+                                    <div class="layer-name">ZBE / Estacionamiento regulado</div>
+                                    <div class="layer-desc">Zonas de Bajas Emisiones y regulación (OSM)</div>
+                                    <div class="layer-count" id="zbe-count"></div>
+                                </div>
+                                <div class="layer-switch"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top:16px;padding:10px;background:var(--kz-azul-50);border-radius:var(--kz-radius-md);border:1px solid var(--kz-azul-200);">
+                            <p style="font-size:0.72rem;color:var(--kz-azul-800);line-height:1.5;">
+                                💡 <b>Fuentes de datos:</b> GBFS (API pública) y OpenStreetMap (Overpass API). 
+                                Los datos se cargan dinámicamente según la zona visible del mapa.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -334,7 +413,7 @@ const MODE_NAMES = {
 function switchTab(tab) {
     document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelector(`.sidebar-tab:nth-child(${tab==='search'?1:tab==='routes'?2:3})`).classList.add('active');
+    document.querySelector(`.sidebar-tab:nth-child(${tab==='search'?1:tab==='routes'?2:tab==='data'?3:4})`).classList.add('active');
     document.getElementById('tab-'+tab).classList.add('active');
 }
 
@@ -1621,6 +1700,252 @@ async function autoLoadZips() {
     updateRouteExplorer();
 }
 autoLoadZips();
+
+// ============================================
+// MAP LAYERS — GBFS, Parkings, ZBE
+// ============================================
+
+const layerState = {
+    'gbfs': { active: false, layer: null, data: null, loading: false },
+    'parking-public': { active: false, layer: null, data: null, loading: false },
+    'parking-private': { active: false, layer: null, data: null, loading: false },
+    'zbe': { active: false, layer: null, data: null, loading: false }
+};
+
+const GBFS_CATALOG_URL = 'https://raw.githubusercontent.com/Ntizar/GBFSSpain/main/data/systems.json';
+let gbfsCatalog = null;
+
+async function loadGBFSCatalog() {
+    if (gbfsCatalog) return gbfsCatalog;
+    try {
+        const resp = await fetch(GBFS_CATALOG_URL);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        gbfsCatalog = await resp.json();
+        console.log('[Layers] GBFS catalog: ' + gbfsCatalog.length + ' systems');
+        return gbfsCatalog;
+    } catch (e) {
+        console.warn('[Layers] GBFS catalog load failed:', e.message);
+        return [];
+    }
+}
+
+async function toggleLayer(layerId) {
+    const state = layerState[layerId];
+    if (!state) return;
+    
+    state.active = !state.active;
+    const el = document.getElementById('layer-' + layerId);
+    
+    if (state.active) {
+        el.classList.add('active');
+        if (!state.data && !state.loading) {
+            await loadLayerData(layerId);
+        }
+        if (state.layer) state.layer.addTo(map);
+    } else {
+        el.classList.remove('active');
+        if (state.layer) map.removeLayer(state.layer);
+    }
+}
+
+async function loadLayerData(layerId) {
+    const state = layerState[layerId];
+    state.loading = true;
+    const countEl = document.getElementById(layerId + '-count');
+    if (countEl) countEl.innerHTML = '<span class="layer-loading">⏳ Cargando...</span>';
+    
+    try {
+        switch (layerId) {
+            case 'gbfs': await loadGBFSLayer(); break;
+            case 'parking-public': await loadOSMLayer('parking-public', 'parking'); break;
+            case 'parking-private': await loadOSMLayer('parking-private', 'parking'); break;
+            case 'zbe': await loadOSMLayer('zbe', 'zbe'); break;
+        }
+    } catch (e) {
+        console.error('[Layers] Error loading ' + layerId + ':', e);
+        if (countEl) countEl.innerHTML = '<span class="layer-error">❌ Error: ' + e.message + '</span>';
+    }
+    state.loading = false;
+}
+
+// ============================================
+// GBFS — Bicicletas públicas
+// ============================================
+
+async function loadGBFSLayer() {
+    const catalog = await loadGBFSCatalog();
+    if (!catalog || catalog.length === 0) {
+        document.getElementById('gbfs-count').innerHTML = '<span class="layer-error">No se pudo cargar el catálogo</span>';
+        return;
+    }
+    
+    const bounds = map.getBounds();
+    const sw = bounds.getSouthWest();
+    const ne = bounds.getNorthEast();
+    
+    // Filter systems whose approximate city center is near the viewport
+    // Use a generous bounding box (all of Spain roughly)
+    const spainBounds = { south: 35.5, north: 44.0, west: -10.0, east: 5.0 };
+    const nearbySystems = catalog.filter(s => {
+        if (!s.lat || !s.lon) return false;
+        return s.lat >= spainBounds.south && s.lat <= spainBounds.north &&
+               s.lon >= spainBounds.west && s.lon <= spainBounds.east;
+    });
+    
+    console.log('[GBFS] Fetching stations from ' + nearbySystems.length + ' systems...');
+    
+    const allStations = [];
+    const batchSize = 5;
+    
+    for (let i = 0; i < nearbySystems.length; i += batchSize) {
+        const batch = nearbySystems.slice(i, i + batchSize);
+        const results = await Promise.allSettled(batch.map(async (sys) => {
+            if (!sys.discovery_url) return [];
+            try {
+                const resp = await fetch(sys.discovery_url);
+                if (!resp.ok) return [];
+                const gbfs = await resp.json();
+                
+                // Find station_information feed
+                const feeds = (gbfs.data && gbfs.data.feeds) || gbfs.feeds || [];
+                const infoFeed = feeds.find(f => (f.name || f.file || '').includes('station_information'));
+                if (!infoFeed || !infoFeed.url) return [];
+                
+                const infoResp = await fetch(infoFeed.url);
+                if (!infoResp.ok) return [];
+                const infoData = await infoResp.json();
+                const stations = (infoData.data && infoData.data.stations) || [];
+                
+                return stations.map(st => ({
+                    ...st,
+                    system: sys.name,
+                    system_id: sys.id || sys.name,
+                    lat: parseFloat(st.lat),
+                    lon: parseFloat(st.lon)
+                })).filter(st => !isNaN(st.lat) && !isNaN(st.lon));
+            } catch (e) {
+                return [];
+            }
+        }));
+        
+        results.forEach(r => {
+            if (r.status === 'fulfilled') allStations.push(...r.value);
+        });
+    }
+    
+    layerState.gbfs.data = allStations;
+    
+    // Create markers
+    const markers = allStations.map(st => {
+        const icon = L.divIcon({
+            html: '<div style="width:12px;height:12px;background:#16a34a;border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+            iconSize: [12, 12], iconAnchor: [6, 6], className: ''
+        });
+        const capacity = st.capacity || '?';
+        const name = st.name || 'Estación sin nombre';
+        return L.marker([st.lat, st.lon], { icon })
+            .bindPopup('<b>🚲 ' + name + '</b><br>' + st.system + '<br>Capacidad: ' + capacity);
+    });
+    
+    layerState.gbfs.layer = L.layerGroup(markers);
+    document.getElementById('gbfs-count').textContent = allStations.length + ' estaciones en ' + nearbySystems.length + ' sistemas';
+    
+    if (layerState.gbfs.active) layerState.gbfs.layer.addTo(map);
+}
+
+// ============================================
+// OVERPASS — Parkings y ZBE
+// ============================================
+
+async function loadOSMLayer(layerId, type) {
+    const bounds = map.getBounds();
+    const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+    
+    let query = '';
+    if (type === 'parking') {
+        const isPublic = layerId === 'parking-public';
+        query = '[out:json][timeout:25];(';
+        if (isPublic) {
+            query += 'node["amenity"="parking"]["access"!="private"]["access"!="customers"](' + bbox + ');';
+            query += 'way["amenity"="parking"]["access"!="private"]["access"!="customers"](' + bbox + ');';
+        } else {
+            query += 'node["amenity"="parking"]["access"="private"](' + bbox + ');';
+            query += 'node["amenity"="parking"]["access"="customers"](' + bbox + ');';
+            query += 'way["amenity"="parking"]["access"="private"](' + bbox + ');';
+            query += 'way["amenity"="parking"]["access"="customers"](' + bbox + ');';
+        }
+        query += ');out center body;';
+    } else if (type === 'zbe') {
+        query = '[out:json][timeout:25];(';
+        // ZBE zones
+        query += 'way["boundary"="low_emission_zone"](' + bbox + ');';
+        query += 'relation["boundary"="low_emission_zone"](' + bbox + ');';
+        // Regulated parking (ZONA SER / parking:regulation)
+        query += 'node["amenity"="parking"]["parking:regulation"="yes"](' + bbox + ');';
+        query += 'way["amenity"="parking"]["parking:regulation"="yes"](' + bbox + ');';
+        query += 'node["traffic"="regulatory_sign"]["traffic"~"no_stopping|no_parking|parking"](' + bbox + ');';
+        query += ');out center body;';
+    }
+    
+    console.log('[Overpass] Querying ' + type + '...');
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+    });
+    
+    if (!resp.ok) throw new Error('Overpass HTTP ' + resp.status);
+    const data = await resp.json();
+    const elements = data.elements || [];
+    
+    layerState[layerId].data = elements;
+    
+    const markers = [];
+    const color = type === 'parking' ? (layerId === 'parking-public' ? '#2563eb' : '#9333ea') : '#dc2626';
+    const iconChar = type === 'parking' ? '🅿️' : '🚫';
+    
+    elements.forEach(el => {
+        const lat = el.lat || (el.center && el.center.lat);
+        const lon = el.lon || (el.center && el.center.lon);
+        if (!lat || !lon) return;
+        
+        const tags = el.tags || {};
+        const name = tags.name || tags['name:es'] || (type === 'parking' ? 'Parking' : 'ZBE/Regulación');
+        const access = tags.access || 'no especificado';
+        const capacity = tags.capacity || '';
+        const operator = tags.operator || '';
+        
+        const icon = L.divIcon({
+            html: '<div style="width:10px;height:10px;background:' + color + ';border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+            iconSize: [10, 10], iconAnchor: [5, 5], className: ''
+        });
+        
+        let popup = '<b>' + iconChar + ' ' + name + '</b>';
+        if (type === 'parking') popup += '<br>Acceso: ' + access;
+        if (capacity) popup += '<br>Plazas: ' + capacity;
+        if (operator) popup += '<br>Operador: ' + operator;
+        
+        markers.push(L.marker([lat, lon], { icon }).bindPopup(popup));
+    });
+    
+    layerState[layerId].layer = L.layerGroup(markers);
+    document.getElementById(layerId + '-count').textContent = elements.length + ' elementos';
+    
+    if (layerState[layerId].active) layerState[layerId].layer.addTo(map);
+}
+
+// Refresh layers when map moves (debounced)
+let layerRefreshTimer = null;
+map.on('moveend', () => {
+    if (layerRefreshTimer) clearTimeout(layerRefreshTimer);
+    layerRefreshTimer = setTimeout(() => {
+        Object.keys(layerState).forEach(id => {
+            if (layerState[id].active && layerState[id].data) {
+                // Reload data for new viewport
+                loadLayerData(id);
+            }
+        });
+    }, 1000);
+});
 
 </script>
 
