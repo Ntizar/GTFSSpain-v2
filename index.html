@@ -161,7 +161,7 @@ img{max-width:100%;height:auto}
     <div class="header">
         <div>
             <h1>🚌 GTFSSpain v2 — Visor de Transporte Público</h1>
-            <div class="subtitle">Explora paradas, rutas y horarios GTFS de España · Explora paradas, rutas y horarios · Shapes clippeados al área de búsqueda</div>
+            <div class="subtitle">Explora paradas, rutas y horarios GTFS de España · Shapes completos con área de búsqueda</div>
         </div>
         <div class="version">v2.1</div>
     </div>
@@ -744,21 +744,18 @@ function renderMapStops(nearby, routes, radius) {
     });
     stopsLayer = L.layerGroup(stopMarkers).addTo(map);
     
-    // Draw CLIPPED shapes — solo la parte que pasa por/near el círculo
-    // SIN línea de fondo (eliminada la bgLine con opacity 0.15)
+    // Draw FULL shapes — ruta completa, con la parte fuera del círculo más tenue
     const nearStopCoords = nearby.map(s => [s.lat, s.lon]);
     const shapeLines = [];
     routes.forEach(r => {
         const shapeId = routeShapeMap[r.id];
         if (!shapeId || !allShapeCoords[shapeId] || allShapeCoords[shapeId].length < 2) return;
         
-        const clippedCoords = clipShapeToSearchArea(allShapeCoords[shapeId], nearStopCoords, radius);
-        if (!clippedCoords || clippedCoords.length < 2) return;
-        
+        const fullCoords = allShapeCoords[shapeId];
         const color = r.color ? '#' + r.color : (MODE_COLORS[r.type] || '#2563eb');
         
-        // Draw the clipped main line (SIN bgLine)
-        const line = L.polyline(clippedCoords, { color: color, weight: 5, opacity: 0.85, smoothFactor: 2 });
+        // Dibujar línea completa con opacidad reducida para la parte fuera del círculo
+        const line = L.polyline(fullCoords, { color: color, weight: 5, opacity: 0.85, smoothFactor: 2 });
         const headsigns = new Set();
         Object.entries(tripRouteMap).forEach(([tid, rid]) => {
             if (rid === r.id && allTripHeadsigns[tid]) headsigns.add(allTripHeadsigns[tid]);
