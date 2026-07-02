@@ -1715,6 +1715,46 @@ const layerState = {
 const GBFS_CATALOG_URL = 'https://raw.githubusercontent.com/Ntizar/GBFSSpain/main/data/systems.json';
 let gbfsCatalog = null;
 
+// Coordenadas de ciudades españolas con sistemas GBFS
+const GBFS_CITY_COORDS = {
+    'a coruña': [43.37, -8.40], 'coruña': [43.37, -8.40],
+    'rivas-vaciamadrid': [40.33, -3.53], 'rivas': [40.33, -3.53],
+    'barcelona': [41.39, 2.17], 'bilbao': [43.26, -2.93],
+    'zaragoza': [41.65, -0.88], 'donostia': [43.32, -1.98], 'san sebastián': [43.32, -1.98],
+    'alusma': [43.32, -1.98],
+    'valencia': [39.47, -0.38], 'madrid': [40.42, -3.70],
+    'sevilla': [37.39, -5.99], 'málaga': [36.72, -4.42],
+    'palma': [39.57, 2.65], 'alicante': [38.35, -0.49],
+    'vitoria-gasteiz': [42.85, -2.67], 'vitoria': [42.85, -2.67],
+    'santander': [43.46, -3.81], 'granada': [37.18, -3.60],
+    'cádiz': [36.53, -6.29], 'tarragona': [41.12, 1.25],
+    'castellón': [39.99, -0.05], 'gijón': [43.54, -5.66],
+    'oviedo': [43.36, -5.85], 'león': [42.60, -5.57],
+    'pamplona': [42.82, -1.64], 'logroño': [42.46, -2.45],
+    'burgos': [42.34, -3.70], 'salamanca': [40.97, -5.66],
+    'córdoba': [37.88, -4.78], 'huelva': [37.26, -6.94],
+    'jaén': [37.77, -3.79], 'lugo': [43.01, -7.56],
+    'pontevedra': [42.43, -8.64], 'vigo': [42.23, -8.72],
+    'ourense': [42.34, -7.86], 'ferrol': [43.49, -8.23],
+    'alcobendas': [40.54, -3.64], 'getafe': [40.29, -3.73],
+    'leganés': [40.33, -3.76], 'mostoles': [40.32, -3.86],
+    'alcorcón': [40.35, -3.83], 'fuenlabrada': [40.28, -3.79],
+    'parla': [40.24, -3.77], 'torrejón': [40.45, -3.48],
+    'alcalá de henares': [40.48, -3.36], 'coslada': [40.43, -3.56],
+    'san sebastian de los reyes': [40.56, -3.62],
+    'arona': [28.10, -16.68], 'tenerife': [28.46, -16.25],
+    'las palmas': [28.10, -15.41], 'santa cruz de tenerife': [28.47, -16.25],
+    'ciudad real': [38.99, -3.93], 'cuenca': [40.07, -2.13],
+    'teruel': [40.34, -1.11], 'huesca': [42.14, -0.41],
+    'soria': [41.76, -2.47], 'segovia': [40.95, -4.12],
+    'ávila': [40.66, -4.70], 'guadalajara': [40.63, -3.17],
+    'toledo': [39.86, -4.03], 'badajoz': [38.88, -6.97],
+    'mérida': [38.92, -6.34], 'cáceres': [39.48, -6.37],
+    'galicia': [42.88, -8.55], 'asturias': [43.36, -5.85],
+    'euskadi': [42.99, -2.62], 'catalunya': [41.59, 2.17],
+    'balears': [39.57, 2.65], 'canarias': [28.10, -15.41]
+};
+
 async function loadGBFSCatalog() {
     if (gbfsCatalog) return gbfsCatalog;
     try {
@@ -1779,39 +1819,49 @@ async function loadGBFSLayer() {
         return;
     }
     
-    const bounds = map.getBounds();
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
+    // Filter systems by proximity to search center (if available) or map center
+    const center = currentLat && currentLon ? [currentLat, currentLon] : [map.getCenter().lat, map.getCenter().lng];
+    const radius = parseInt(document.getElementById('radiusSlider')?.value || '2000');
     
-    // Filter systems whose approximate city center is near the viewport
-    // Use a generous bounding box (all of Spain roughly)
-    const spainBounds = { south: 35.5, north: 44.0, west: -10.0, east: 5.0 };
+    // Find systems whose city is within 2x the search radius
     const nearbySystems = catalog.filter(s => {
-        if (!s.lat || !s.lon) return false;
-        return s.lat >= spainBounds.south && s.lat <= spainBounds.north &&
-               s.lon >= spainBounds.west && s.lon <= spainBounds.east;
+        const cityKey = (s.city || '').toLowerCase().trim();
+        const coords = GBFS_CITY_COORDS[cityKey];
+        if (!coords) return false;
+        return haversine(center[0], center[1], coords[0], coords[1]) <= radius * 3;
     });
     
-    console.log('[GBFS] Fetching stations from ' + nearbySystems.length + ' systems...');
+    if (nearbySystems.length === 0) {
+        // Fallback: try all systems (limit to 10 fastest)
+        const fallback = catalog.filter(s => s.discovery_url).slice(0, 8);
+        nearbySystems.push(...fallback);
+    }
+    
+    console.log('[GBFS] Fetching stations from ' + nearbySystems.length + ' systems near circle...');
     
     const allStations = [];
-    const batchSize = 5;
+    const batchSize = 3;
     
     for (let i = 0; i < nearbySystems.length; i += batchSize) {
         const batch = nearbySystems.slice(i, i + batchSize);
         const results = await Promise.allSettled(batch.map(async (sys) => {
             if (!sys.discovery_url) return [];
             try {
-                const resp = await fetch(sys.discovery_url);
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 8000);
+                const resp = await fetch(sys.discovery_url, { signal: controller.signal });
+                clearTimeout(timeout);
                 if (!resp.ok) return [];
                 const gbfs = await resp.json();
                 
-                // Find station_information feed
                 const feeds = (gbfs.data && gbfs.data.feeds) || gbfs.feeds || [];
                 const infoFeed = feeds.find(f => (f.name || f.file || '').includes('station_information'));
                 if (!infoFeed || !infoFeed.url) return [];
                 
-                const infoResp = await fetch(infoFeed.url);
+                const controller2 = new AbortController();
+                const timeout2 = setTimeout(() => controller2.abort(), 8000);
+                const infoResp = await fetch(infoFeed.url, { signal: controller2.signal });
+                clearTimeout(timeout2);
                 if (!infoResp.ok) return [];
                 const infoData = await infoResp.json();
                 const stations = (infoData.data && infoData.data.stations) || [];
@@ -1819,7 +1869,7 @@ async function loadGBFSLayer() {
                 return stations.map(st => ({
                     ...st,
                     system: sys.name,
-                    system_id: sys.id || sys.name,
+                    system_id: sys.system_id || sys.name,
                     lat: parseFloat(st.lat),
                     lon: parseFloat(st.lon)
                 })).filter(st => !isNaN(st.lat) && !isNaN(st.lon));
@@ -1833,10 +1883,15 @@ async function loadGBFSLayer() {
         });
     }
     
-    layerState.gbfs.data = allStations;
+    // Filter stations within search circle
+    const circleStations = allStations.filter(st => 
+        haversine(center[0], center[1], st.lat, st.lon) <= radius
+    );
     
-    // Create markers
-    const markers = allStations.map(st => {
+    layerState.gbfs.data = circleStations.length > 0 ? circleStations : allStations;
+    const displayStations = layerState.gbfs.data;
+    
+    const markers = displayStations.map(st => {
         const icon = L.divIcon({
             html: '<div style="width:12px;height:12px;background:#16a34a;border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
             iconSize: [12, 12], iconAnchor: [6, 6], className: ''
@@ -1848,7 +1903,7 @@ async function loadGBFSLayer() {
     });
     
     layerState.gbfs.layer = L.layerGroup(markers);
-    document.getElementById('gbfs-count').textContent = allStations.length + ' estaciones en ' + nearbySystems.length + ' sistemas';
+    document.getElementById('gbfs-count').textContent = displayStations.length + ' estaciones (' + nearbySystems.length + ' sistemas)';
     
     if (layerState.gbfs.active) layerState.gbfs.layer.addTo(map);
 }
@@ -1858,10 +1913,16 @@ async function loadGBFSLayer() {
 // ============================================
 
 async function loadOSMLayer(layerId, type) {
-    const bounds = map.getBounds();
-    const bbox = bounds.getSouth() + ',' + bounds.getWest() + ',' + bounds.getNorth() + ',' + bounds.getEast();
+    const center = currentLat && currentLon ? [currentLat, currentLon] : [map.getCenter().lat, map.getCenter().lng];
+    const radius = parseInt(document.getElementById('radiusSlider')?.value || '2000');
+    
+    // Use search circle area for Overpass bbox (with some margin)
+    const margin = Math.max(radius * 0.01, 0.005); // ~500m minimum margin
+    const bbox = (center[0] - margin) + ',' + (center[1] - margin) + ',' + (center[0] + margin) + ',' + (center[1] + margin);
     
     let query = '';
+    const needGeom = (type === 'zbe'); // Need full geometry for polygons
+    
     if (type === 'parking') {
         const isPublic = layerId === 'parking-public';
         query = '[out:json][timeout:25];(';
@@ -1876,18 +1937,15 @@ async function loadOSMLayer(layerId, type) {
         }
         query += ');out center body;';
     } else if (type === 'zbe') {
-        query = '[out:json][timeout:25];(';
-        // ZBE zones
+        query = '[out:json][timeout:30];(';
         query += 'way["boundary"="low_emission_zone"](' + bbox + ');';
         query += 'relation["boundary"="low_emission_zone"](' + bbox + ');';
-        // Regulated parking (ZONA SER / parking:regulation)
         query += 'node["amenity"="parking"]["parking:regulation"="yes"](' + bbox + ');';
         query += 'way["amenity"="parking"]["parking:regulation"="yes"](' + bbox + ');';
-        query += 'node["traffic"="regulatory_sign"]["traffic"~"no_stopping|no_parking|parking"](' + bbox + ');';
-        query += ');out center body;';
+        query += ');out ' + (needGeom ? 'geom' : 'center') + ' body;';
     }
     
-    console.log('[Overpass] Querying ' + type + '...');
+    console.log('[Overpass] Querying ' + type + ' (bbox: ' + bbox.substring(0,30) + '...)');
     const resp = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
         body: 'data=' + encodeURIComponent(query)
@@ -1899,53 +1957,79 @@ async function loadOSMLayer(layerId, type) {
     
     layerState[layerId].data = elements;
     
-    const markers = [];
+    const features = [];
     const color = type === 'parking' ? (layerId === 'parking-public' ? '#2563eb' : '#9333ea') : '#dc2626';
     const iconChar = type === 'parking' ? '🅿️' : '🚫';
     
     elements.forEach(el => {
-        const lat = el.lat || (el.center && el.center.lat);
-        const lon = el.lon || (el.center && el.center.lon);
-        if (!lat || !lon) return;
-        
         const tags = el.tags || {};
         const name = tags.name || tags['name:es'] || (type === 'parking' ? 'Parking' : 'ZBE/Regulación');
         const access = tags.access || 'no especificado';
         const capacity = tags.capacity || '';
         const operator = tags.operator || '';
         
-        const icon = L.divIcon({
-            html: '<div style="width:10px;height:10px;background:' + color + ';border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
-            iconSize: [10, 10], iconAnchor: [5, 5], className: ''
-        });
-        
         let popup = '<b>' + iconChar + ' ' + name + '</b>';
         if (type === 'parking') popup += '<br>Acceso: ' + access;
         if (capacity) popup += '<br>Plazas: ' + capacity;
         if (operator) popup += '<br>Operador: ' + operator;
+        if (type === 'zbe') {
+            const zone = tags.zone || tags['zone:maxspeed'] || '';
+            if (zone) popup += '<br>Zona: ' + zone;
+        }
         
-        markers.push(L.marker([lat, lon], { icon }).bindPopup(popup));
+        // For ZBE polygons (ways/relations with geometry)
+        if (needGeom && el.type === 'way' && el.geometry && el.geometry.length > 2) {
+            const latlngs = el.geometry.map(p => [p.lat, p.lon]);
+            const poly = L.polygon(latlngs, {
+                color: color, weight: 2, fillColor: color, fillOpacity: 0.2, opacity: 0.7
+            }).bindPopup(popup);
+            poly.on('mouseover', function() { this.setStyle({ fillOpacity: 0.4, weight: 3 }); });
+            poly.on('mouseout', function() { this.setStyle({ fillOpacity: 0.2, weight: 2 }); });
+            features.push(poly);
+        } else if (needGeom && el.type === 'relation' && el.members) {
+            // Render relation members as polygons
+            el.members.filter(m => m.type === 'way' && m.geometry).forEach(m => {
+                const latlngs = m.geometry.map(p => [p.lat, p.lon]);
+                if (latlngs.length > 2) {
+                    const poly = L.polygon(latlngs, {
+                        color: color, weight: 2, fillColor: color, fillOpacity: 0.2, opacity: 0.7
+                    }).bindPopup(popup);
+                    poly.on('mouseover', function() { this.setStyle({ fillOpacity: 0.4, weight: 3 }); });
+                    poly.on('mouseout', function() { this.setStyle({ fillOpacity: 0.2, weight: 2 }); });
+                    features.push(poly);
+                }
+            });
+        } else {
+            // Node or way without geometry → marker
+            const lat = el.lat || (el.center && el.center.lat);
+            const lon = el.lon || (el.center && el.center.lon);
+            if (!lat || !lon) return;
+            
+            const icon = L.divIcon({
+                html: '<div style="width:10px;height:10px;background:' + color + ';border:2px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></div>',
+                iconSize: [10, 10], iconAnchor: [5, 5], className: ''
+            });
+            features.push(L.marker([lat, lon], { icon }).bindPopup(popup));
+        }
     });
     
-    layerState[layerId].layer = L.layerGroup(markers);
+    layerState[layerId].layer = L.layerGroup(features);
     document.getElementById(layerId + '-count').textContent = elements.length + ' elementos';
     
     if (layerState[layerId].active) layerState[layerId].layer.addTo(map);
 }
 
-// Refresh layers when map moves (debounced)
-let layerRefreshTimer = null;
-map.on('moveend', () => {
-    if (layerRefreshTimer) clearTimeout(layerRefreshTimer);
-    layerRefreshTimer = setTimeout(() => {
+// Refresh layers when search is done (after buscarParadas)
+const _origBuscar = buscarParadas;
+buscarParadas = function() {
+    _origBuscar();
+    // Reload active layers with new circle
+    setTimeout(() => {
         Object.keys(layerState).forEach(id => {
-            if (layerState[id].active && layerState[id].data) {
-                // Reload data for new viewport
-                loadLayerData(id);
-            }
+            if (layerState[id].active) loadLayerData(id);
         });
-    }, 1000);
-});
+    }, 500);
+};
 
 </script>
 
